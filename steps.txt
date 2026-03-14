@@ -1,0 +1,198 @@
+Toxic Text Rewriting System – Full Plan
+1️⃣ Set Up the Project Environment
+
+Create a project folder and install the required tools.
+
+Tools we use:
+
+Python
+
+FastAPI
+
+PyTorch
+
+Transformers
+
+Scikit-learn
+
+You already installed most of these. ✅
+
+2️⃣ Download the Toxicity Dataset
+
+We need data to train the toxicity detector.
+
+Dataset:
+
+Jigsaw Toxic Comment Classification Challenge
+
+This dataset contains comments labeled:
+
+toxic
+
+severe toxic
+
+obscene
+
+insult
+
+threat
+
+identity hate
+
+Goal:
+
+Convert them into two labels:
+
+toxic
+not toxic
+3️⃣ Train a Lightweight Toxicity Detector
+
+We train a small classifier using:
+
+Scikit-learn
+
+Model architecture:
+
+TF-IDF Vectorizer
+        ↓
+Logistic Regression
+
+This model will:
+
+Input → text
+Output → toxic or not toxic
+
+Advantages:
+
+very fast
+
+very small (~10MB)
+
+perfect for free servers
+
+4️⃣ Train the Text Rewriting Model
+
+Now we train the rewriting model.
+
+Model:
+
+T5
+
+Dataset used:
+
+ParaDetox
+
+Example training pair:
+
+Input: You are stupid
+Output: I disagree with that statement
+
+After training, the model learns:
+
+toxic sentence → polite sentence
+5️⃣ Save the Trained Models
+
+After training we save:
+
+classifier.pkl
+t5_model/
+
+These files are what we use in production.
+
+Important:
+
+You do NOT send the datasets to production.
+
+Only send:
+
+trained weights
+6️⃣ Build the API Server
+
+Create a backend using:
+
+FastAPI
+
+The server will load:
+
+classifier.pkl
+t5_model
+
+Then create an endpoint:
+
+POST /rewrite
+
+Input:
+
+{
+"text": "You are stupid"
+}
+7️⃣ Processing Pipeline
+
+Inside the server we run this logic:
+
+User text
+   ↓
+Toxicity classifier
+   ↓
+If toxic
+      ↓
+Rewrite with T5
+Else
+      ↓
+Return original text
+
+Example result:
+
+Input: You are stupid
+Output: I may disagree with that idea
+8️⃣ Deploy to a Free Server
+
+Deploy the API to:
+
+Render
+
+Free tier can handle this because the models are small:
+
+Classifier ~10MB
+T5 model ~220MB
+
+Total memory ≈ 230MB
+
+Which fits.
+
+9️⃣ Connect Your Frontend
+
+Your frontend (React or website) will call:
+
+POST /rewrite
+
+Then show the result to the user.
+
+Example UI flow:
+
+User types message
+        ↓
+Click "Improve Message"
+        ↓
+Server rewrites text
+        ↓
+User sees polite version
+🔟 Future Improvements
+
+Later when the product grows you can upgrade to:
+
+Better toxicity detection:
+
+Detoxify
+
+Better rewriting models.
+
+Final System Architecture
+Frontend
+   ↓
+FastAPI Server
+   ↓
+Toxicity Classifier
+   ↓
+If toxic → T5 Rewrite
+Else → Return Original
