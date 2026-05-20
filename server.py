@@ -1,86 +1,108 @@
-# server.py  (rename script.py → server.py if you want — it's clearer)
+# server.py
+
 from fastapi import FastAPI
 from pydantic import BaseModel
-from transformers import T5Tokenizer, T5ForConditionalGeneration
 import joblib
-import torch
 import os
-import uvicorn  # ← ADD THIS (needed for manual port binding on Render)
+import uvicorn
 
-# ================== CONFIG ==================
-MODEL_DIR = os.path.abspath("models/rewriter_model_fp16")   # your compressed fp16 folder
-
-TOXICITY_MODEL_PATH = "models/toxicity_classifier/classifier.pkl"
-
-# ================== Load models at startup ==================
-print("Loading toxicity classifier...")
-toxicity_model = joblib.load(TOXICITY_MODEL_PATH)
-print("Toxicity classifier loaded!")
-
-print("Loading T5 rewriter (fp16 mode)...")
-rewriter_model = T5ForConditionalGeneration.from_pretrained(
-    MODEL_DIR,
-    torch_dtype=torch.float16,
-    low_cpu_mem_usage=True,
-    device_map="cpu"
+# ================== Load Model ==================
+TOXICITY_MODEL_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "models",
+    "toxicity_classifier",
+    "classifier.pkl"
 )
 
-rewriter_tokenizer = T5Tokenizer.from_pretrained(MODEL_DIR)
-rewriter_model.eval()
+print("🚀 Loading toxicity classifier...")
 
-print("Rewriter model loaded successfully!")
+saved = joblib.load(TOXICITY_MODEL_PATH)
 
-# ================== FastAPI setup ==================
-app = FastAPI(title="Text Processing API")
+vectorizer = saved["vectorizer"]
+model = saved["model"]
 
+print("✅ Toxicity classifier loaded!")
+
+# ================== FastAPI ==================
+app = FastAPI(title="Toxicity Classifier API")
+
+# ================== Request Schema ==================
 class RequestBody(BaseModel):
     text: str
 
-@app.post("/process/")
-async def process_text(body: RequestBody):
-    text = body.text.strip()
+# ================== Toxic Word Extraction ==================
+def extract_toxic_words(text, vectorizer, model, top_n=5):
 
-    # Toxicity check
-    pred_prob = toxicity_model.predict_proba([text])[0][1]
-    is_toxic = pred_prob >= 0.4
+    words = text.lower().split()
 
-    if not is_toxic:
-        return {"toxicity": False, "original": text}
+    coefficients = model.coef_[0]
 
-    # Rewrite if toxic
-    prefix = "rewrite: "
-    input_text = prefix + text
+    toxic_words = []
 
-    inputs = rewriter_tokenizer(
-        input_text,
-        return_tensors="pt",
-        max_length=256,
-        truncation=True
+    for word in words:
+
+        idx = vectorizer.vocabulary_.get(word)
+
+        if idx is not None:
+
+            weight = coefficients[idx]
+
+            if weight > 0:
+
+                toxic_words.append({
+                    "word": word,
+                    "weight": round(float(weight), 3)
+                })
+
+    toxic_words = sorted(
+        toxic_words,
+        key=lambda x: x["weight"],
+        reverse=True
     )
 
-    with torch.no_grad():
-        outputs = rewriter_model.generate(
-            inputs.input_ids.to("cpu"),
-            attention_mask=inputs.attention_mask.to("cpu"),
-            max_new_tokens=128,
-            num_beams=1,
-            do_sample=False,
-            early_stopping=True,
-            repetition_penalty=1.2
-        )
+    return toxic_words[:top_n]
 
-    rewritten = rewriter_tokenizer.decode(outputs[0], skip_special_tokens=True)
-    rewritten = rewritten.replace(prefix, "").strip()
+# ================== Health Route ==================
+@app.get("/")
+def health():
+    return {
+        "status": "ok"
+    }
 
-    return {"toxicity": True, "rewrite": rewritten, "original": text}
+# ================== Prediction Route ==================
+@app.post("/process/")
+def process_text(body: RequestBody):
 
-# ================== Render-friendly run block ==================
+    text = body.text.strip()
+
+    text_vec = vectorizer.transform([text])
+
+    pred_prob = model.predict_proba(text_vec)[0][1]
+
+    is_toxic = bool(pred_prob >= 0.4)
+
+    toxic_words = extract_toxic_words(
+        text,
+        vectorizer,
+        model
+    )
+
+    return {
+        "toxicity": is_toxic,
+        "score": round(float(pred_prob), 4),
+        "bad_words": toxic_words,
+        "original": text
+    }
+
+# ================== Run Server ==================
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))           # ← Render sets PORT
+
+    port = int(os.environ.get("PORT", 8000))
+
     uvicorn.run(
-        "server:app",                                      # ← important: "filename:app"
-        host="0.0.0.0",                                    # ← must be 0.0.0.0
+        "server:app",
+        host="0.0.0.0",
         port=port,
-        workers=1,                                         # ← free tier: only 1 worker!
+        workers=1,
         log_level="info"
     )
