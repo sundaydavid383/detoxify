@@ -180,7 +180,7 @@ test_cases = [
     ("This is a great idea",     False),
 ]
 
-THRESHOLD = 0.4
+THRESHOLD = 0.65
 
 print("\n🔍 Quick Test Predictions:\n")
 correct = 0
