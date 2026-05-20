@@ -1,10 +1,6 @@
-torch
-transformers
-datasets
-pandas
-numpy
 fastapi
 uvicorn
 scikit-learn
-detoxify
-accelerate>=0.27.0
+numpy
+pandas
+joblib
