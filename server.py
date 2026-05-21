@@ -1,9 +1,11 @@
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
 import os
 import re
 import uvicorn
+
 
 # ================== BASE PATH ==================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -71,7 +73,16 @@ except Exception as e:
 
 # ================== FASTAPI APP ==================
 app = FastAPI(title="Toxicity Classifier API")
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+         "http://localhost:5173/",
+         "https://springscircle.vercel.app/"
+          ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True
+)
 # ================== REQUEST BODY ==================
 class RequestBody(BaseModel):
     text: str
