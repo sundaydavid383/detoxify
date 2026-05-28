@@ -76,8 +76,8 @@ app = FastAPI(title="Toxicity Classifier API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-         "http://localhost:5173/",
-         "https://springscircle.vercel.app/"
+         "http://localhost:5173",
+         "https://springscircle.vercel.app"
           ],
     allow_methods=["*"],
     allow_headers=["*"],
